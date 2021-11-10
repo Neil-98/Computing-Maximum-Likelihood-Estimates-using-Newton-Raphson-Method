@@ -1,0 +1,580 @@
+---
+title: "Maximum Likelihood Estimators Module Prototype"
+output: html_notebook
+---
+
+<h2>Program Modules:</h2>
+<br>
+<h3>Newton Iteration Module</h3>
+<br>
+<h4>Hessian Computation Methods</h4>
+```{r}
+# For log-likelihood of normal distribution
+get_normal_Hessian <- function(W, X) { # W is a column vector containing parameters; X is the sample_data
+  
+  # Extracting parameters from W into variables that better elucidate what they are
+  mu <- W[1]
+  sigma <- W[2]
+  
+  # Computing size of sample data
+  sample_size <- length(X)
+  
+  # second order partial derivatives of log-likelihood function
+  second_derivative_wrt_mu <- (-1 * sample_size / sigma ^ 2)
+  second_derivative_wrt_sigma <- (sample_size / sigma ^ 2) - (3 / sigma ^ 4) * sum((X - mu) ^ 2)
+  derivative_wrt_mu_and_sigma <- (-1 * 2 / sigma ^ 3) * (sum(X) - sample_size * mu) ^ 2
+  
+  # Hessian of log-likelihood function
+  Hessian <- rbind(c(second_derivative_wrt_mu, derivative_wrt_mu_and_sigma), 
+                   c(derivative_wrt_mu_and_sigma, second_derivative_wrt_sigma))
+  
+  return(Hessian)
+}
+```
+
+```{r}
+# For log-likelihood of gamma distribution
+get_gamma_Hessian <- function(W, X) { # W is a column vector containing parameters; X is the sample_data
+  
+  # Extracting parameters from W into variables that better elucidate what they are
+  alpha <- W[1]
+  beta <- W[2]
+  
+  # Computing size of sample data
+  sample_size <- length(X)
+  
+  # second order partial derivatives of log-likelihood function
+  # if (gamma(alpha) != 0) {
+    second_derivative_wrt_alpha <- sample_size * trigamma(alpha)
+  # } else {
+    # second_derivative_wrt_alpha <- sample_size * trigamma(0.0000000000001)
+  # }
+  
+  # if (beta != 0) {
+    second_derivative_wrt_beta <- (-1 * alpha * sample_size) / beta ^ 2
+  # } else {
+  #   second_derivative_wrt_beta <- 99999999999999
+  # }
+  
+  # if (beta != 0) {
+    derivative_wrt_alpha_and_beta <- sample_size / beta
+  # } else {
+  # derivative_wrt_alpha_and_beta <- 99999999999999
+  # }
+  
+  # Hessian of log-likelihood function
+  Hessian <- rbind(c(second_derivative_wrt_alpha, derivative_wrt_alpha_and_beta), 
+                   c(derivative_wrt_alpha_and_beta, second_derivative_wrt_beta))
+  
+  return(Hessian)
+}
+```
+
+<h4>Gradient Computation Methods</h4>
+```{r}
+# For log-likelihood of normal distribution
+get_normal_gradient <- function(W, X) { # W is a column vector containing parameters; X is the sample_data
+  
+  # Extracting parameters from W into variables that better elucidate what they are
+  mu <- W[1]
+  sigma <- W[2]
+  
+  # Computing size of sample data
+  sample_size <- length(X)
+  
+  # first order partial derivatives of log-likelihood function
+  first_derivative_wrt_mu <- (1 / sigma ^ 2) * (sum(X) - sample_size * mu)
+  first_derivative_wrt_sigma <- (-1 * sample_size / sigma) + (1 / sigma ^ 3) * sum((X - mu) ^ 2)
+  
+  # Vector of first order partial derivatives of log-likelihood function
+  gradient <- rbind(c(first_derivative_wrt_mu),
+                                  c(first_derivative_wrt_sigma))
+  
+  return(gradient)
+}
+```
+
+```{r}
+# For log-likelihood of gamma distribution
+get_gamma_gradient <- function(W, X) { # W is a column vector containing parameters; X is the sample_data
+  
+  # Extracting parameters from W into variables that better elucidate what they are
+  alpha <- W[1]
+  beta <- W[2]
+  
+  # Computing size of sample data
+  sample_size <- length(X)
+  
+  # first order partial derivatives of log-likelihood function
+  first_derivative_wrt_alpha <- sample_size * (log(beta) - digamma(alpha)) + sum(log(sample_data))
+  first_derivative_wrt_beta <- (alpha * sample_size) / beta - sum(sample_data)
+  
+  # Vector of first order partial derivatives of log-likelihood function
+  gradient = rbind(c(first_derivative_wrt_alpha),
+                   c(first_derivative_wrt_beta))
+  
+  return(gradient)
+}
+```
+
+<h4>Descent Step Implementation</h4>
+```{r}
+# Descent step
+stepwise_descent <- function(W, X, distribution_name) {
+  
+  if (distribution_name == "normal") {
+    
+    Hessian <- get_normal_Hessian(W, X)
+    Hessian_inverse <- solve(Hessian)
+    gradient <- get_normal_gradient(W, X)
+    
+  } else if (distribution_name == "gamma") {
+    
+    Hessian <- get_gamma_Hessian(W, X)
+    Hessian_inverse <- solve(Hessian)
+    gradient <- get_gamma_gradient(W, X)
+    
+  } else {
+    print("Invalid distribution name")
+  }
+  
+  subtrahend <- Hessian_inverse %*% gradient
+  W <- W - subtrahend
+  return(W)
+}
+```
+
+<h4>Newton-Raphson Iterative Descent Implementation</h4>
+```{r}
+# Looping stepwise_descent
+newton_iteration_descent <- function(W, X, distribution_name, no_of_steps) { # weight_grad_record: A detailed history of weights and gradients at each step of Newton Iteration descent
+  
+  ### Code required just for record-keeping, not for Newton Iteration descent!
+  weight_grad_table <- data.frame(matrix(ncol = 3, nrow = 0))
+  colnames(weight_grad_table) <- c("Step_No", "Weights", "Subtrahend")
+  ###
+  
+  i <- 1
+  for (i in 1: no_of_steps) {
+    
+    if (distribution_name == "normal") {
+    
+      Hessian <- get_normal_Hessian(W, X)
+      Hessian_inverse <- solve(Hessian)
+      gradient <- get_normal_gradient(W, X)
+    
+    } else if (distribution_name == "gamma") {
+    
+      Hessian <- get_gamma_Hessian(W, X)
+      Hessian_inverse <- solve(Hessian)
+      gradient <- get_gamma_gradient(W, X)
+    
+    } else {
+      print("Invalid distribution name")
+    }
+  
+    # print(paste("Hessian", Hessian))
+    subtrahend <- Hessian_inverse %*% gradient
+    
+    ### Code required just for record-keeping, not for Newton Iteration descent!
+    weight_grad_record <- cbind(i, W, subtrahend)
+    colnames(weight_grad_record) <- c("Step_No", "Weights", "Subtrahend")
+    weight_grad_table <- rbind(weight_grad_table, weight_grad_record)
+    ###
+    
+    W <- W - subtrahend
+  }
+  
+  ### Code required just for record-keeping, not for Newton Iteration descent!
+  if (distribution_name == "normal") {
+    
+      Hessian <- get_normal_Hessian(W, X)
+      Hessian_inverse <- solve(Hessian)
+      gradient <- get_normal_gradient(W, X)
+    
+    } else if (distribution_name == "gamma") {
+    
+      Hessian <- get_gamma_Hessian(W, X)
+      Hessian_inverse <- solve(Hessian)
+      gradient <- get_gamma_gradient(W, X)
+    
+    } else {
+      print("Invalid distribution name")
+    }
+  # print(paste("Hessian", Hessian))
+  subtrahend <- Hessian_inverse %*% gradient
+  
+  weight_grad_record <- cbind(i + 1, W, subtrahend)
+  colnames(weight_grad_record) <- c("Step_No", "Weights", "Subtrahend")
+  weight_grad_table <- rbind(weight_grad_table, weight_grad_record)
+  ### 
+  
+  weights_and_record <- list(W, weight_grad_table)
+  names(weights_and_record) <- c("Final_Weights", "Record")
+  
+  return(weights_and_record)
+}
+```
+
+<h3>Method of Moments Estimator Module</h3>
+```{r}
+# For normal distribution
+normal <- function(sample_data) {
+  
+  sample_moment1 <- mean(sample_data)
+  sample_moment2 <- mean(sample_data ^ 2)
+  
+  theoretical_mean <- sample_moment1 
+  theoretical_variance <- sample_moment2 - theoretical_mean ^ 2
+  
+  mu_estimate <- theoretical_mean
+  sigma_estimate <- sqrt(theoretical_variance)
+  
+  estimators <- list(mu_estimate, sigma_estimate)
+  names(estimators) <- c("Estimated_Mu", "Estimated_Sigma")
+  
+  return(estimators)
+}
+
+# For gamma distribution
+gamma <- function(sample_data) {
+  
+  sample_moment1 <- mean(sample_data)
+  sample_moment2 <- mean(sample_data ^ 2)
+  
+  theoretical_mean <- sample_moment1 
+  theoretical_variance <- sample_moment2 - theoretical_mean ^ 2
+  
+  
+  alpha_estimate <- theoretical_mean ^ 2/ theoretical_variance
+  beta_estimate <- theoretical_variance/ theoretical_mean
+  
+  estimators <- list(alpha_estimate, beta_estimate)
+  names(estimators) <- c("Estimated_Alpha", "Estimated_Beta")
+  
+  return(estimators)
+}
+
+# Wrapper Function
+get_MOM_estimators <- function(sample_data, distribution_name, n = 100) {
+  
+  if(distribution_name == "normal") {
+    estimator_list <- normal(sample_data)
+    
+  } else if (distribution_name == "binomial") {
+    estimator_list <- binomial(n, sample_data)
+    
+  } else if (distribution_name == "poisson") {
+    estimator_list <- poisson(sample_data)
+    
+  } else if (distribution_name == "gamma") {
+    estimator_list <- gamma(sample_data)
+    
+  } else if (distribution_name == "beta") {
+    estimator_list <- beta(sample_data)
+    
+  } else if (distribution_name == "exponential") {
+    estimator_list <- exponential(sample_data)
+    
+  } else if (distribution_name == "geometric") {
+    estimator_list <- geometric(sample_data)
+    
+  } else if (distribution_name == "uniform") {
+    estimator_list <- uniform(sample_data)
+    
+  } else if (distribution_name == "multivariate") {
+    estimator_list <- multivariate(sample_data)
+    
+  } else {
+    print("Invalid distribution name")
+    
+  }
+  
+  return(estimator_list)
+}
+```
+
+<h3>Random Sample Generation Module</h3>
+```{r}
+get_sample <- function(sample_size, distribution_name, parameter_list) {
+  if(sample_size > 0) {
+    if(distribution_name == "normal") {
+      sample_data <- rnorm(n = sample_size, mean = parameter_list$mu, sd = parameter_list$sigma)
+  
+    } else if (distribution_name == "binomial") {
+      sample_data <- rbinom(n = sample_size, size = parameter_list$n, prob = parameter_list$prob)
+    
+    } else if (distribution_name == "poisson") {
+      sample_data <- rpois(n = sample_size, lambda = parameter_list$lambda)
+    
+    } else if (distribution_name == "gamma") {
+      sample_data <- rgamma(n = sample_size, shape = parameter_list$alpha, rate = parameter_list$beta)
+    
+    } else if (distribution_name == "beta") {
+      sample_data <- rbeta(n = sample_size, shape1 = parameter_list$alpha, shape2 = parameter_list$beta)
+    
+    } else if (distribution_name == "exponential") {
+      sample_data <- rexp(n = sample_size, rate = parameter_list$lambda)
+    
+    } else if (distribution_name == "geometric") {
+      sample_data <- rgeom(n = sample_size, prob = parameter_list$prob)
+    
+    } else if (distribution_name == "uniform") {
+      sample_data <- runif(n = sample_size, min = parameter_list$a, max = parameter_list$b)
+    
+    } else if (distribution_name == "multivariate") {
+      sample_data <- mvrnorm(n = sample_size, mu = parameter_list$mu, Sigma = parameter_list$sigma)
+      
+    } else {
+      print("Invalid distribution name")
+    
+    }
+  } else {
+    print("Invalid sample_size")
+  }
+  
+  return(sample_data)
+}
+```
+
+<h3>Testing Module</h3>
+<h4>Testing Random Sample Generation Module</h4>
+<h5>Preparing Sample for Large Sample, i.e, Final, Testing newton_iteration_descent()</h5>
+```{r}
+set.seed(123)
+sample_size <- 100
+distribution_name <- "normal"
+parameter_list <- list(0, 1)
+names(parameter_list) <- c("mu", "sigma")
+
+normal_sample_data <- get_sample(sample_size = sample_size, distribution_name = distribution_name, parameter_list = parameter_list)
+```
+
+<h5>Preparing Samples for Small Sample Testing</h5>
+
+<h6>First Test Case -- Checked Derivatives via Solving by Hand</h6>
+```{r}
+first_mu <- 0
+first_sigma <- 1
+first_sample_data <- rbind(c(0.51686204),
+                     c(0.36896453),
+                     c(-0.21538051),
+                     c(0.06529303),
+                     c(-0.03406725))
+```
+
+<h6>Random Sample Case</h6>
+```{r}
+set.seed(123)
+small_test_mu <- 0
+small_test_sigma <- 1
+small_test_sample_size <- 5
+small_test_sample_data <- rnorm(n = small_test_sample_size, mean = small_test_mu, sd = small_test_sigma)
+print(small_test_sample_data)
+```
+
+<h4>Testing Method of Moments Estimator Module</h4>
+<h6>Test Case 1</h6>
+```{r}
+first_estimators <- get_MOM_estimators(first_sample_data, "normal")
+print(first_estimators)
+```
+
+<h6>Small Sample Data</h6>
+```{r}
+small_estimators <- get_MOM_estimators(small_test_sample_data, "normal")
+print(small_estimators)
+```
+
+<h6>Large Sample Data</h6>
+```{r}
+estimators <- get_MOM_estimators(normal_sample_data, "normal")
+print(estimators)
+```
+
+<h4>Testing Gradient Descent Module</h4>
+<h5>Testing get_normal_gradient</h5>
+<h6>Test Case 1</h6>
+```{r}
+first_weights <- rbind(first_mu,
+                 first_sigma)
+gradient <- get_normal_gradient(weights, first_sample_data)
+print(gradient)
+```
+
+<h6>Small Sample Data</h6>
+```{r}
+small_weights <- rbind(small_test_mu,
+                 small_test_sigma)
+gradient <- get_normal_gradient(weights, small_test_sample_data)
+print(gradient)
+```
+
+<h6>Large Sample Data</h6>
+
+```{r}
+weights <- rbind(estimators$Estimated_Mu,
+                 estimators$Estimated_Sigma)
+gradient <- get_normal_gradient(weights, normal_sample_data)
+print(gradient)
+```
+
+<h5>Testing stepwise_descent()</h5>
+<h6>Test Case 1</h6>
+```{r}
+first_weights_t_plus_1 <- stepwise_descent(first_weights, first_sample_data, "normal")
+print(first_weights_t_plus_1)
+```
+<h6>Small Sample Data</h6>
+```{r}
+small_weights_t_plus_1 <- stepwise_descent(small_weights, small_test_sample_data, "normal")
+print(small_weights_t_plus_1)
+```
+
+<h6>Large Sample Data</h6>
+```{r}
+weights_t_plus_1 <- stepwise_descent(weights, normal_sample_data, "normal")
+print(weights_t_plus_1)
+```
+
+<h5>Testing newton_iteration_descent()</h5>
+<h5>With Initial Values of Estimators =/= Method of Moments Estimators</h5>
+<h6>Test Case 1</h6>
+```{r}
+mu_0 <- 0.75
+sigma_0 <- -2.5
+first_weights <- rbind(c(mu_0),
+                       c(sigma_0))
+
+weights_and_record <- newton_iteration_descent(first_weights, first_sample_data, "normal", no_of_steps = 50)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h6>Small Sample Data</h6>
+```{r}
+mu_0 <- 0.75
+sigma_0 <- -2.5
+small_weights <- rbind(c(mu_0),
+                       c(sigma_0))
+
+weights_and_record <- newton_iteration_descent(small_weights, small_test_sample_data, "normal", no_of_steps = 7)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h6>Large Sample Data</h6>
+```{r}
+mu_0 <- 0.75
+sigma_0 <- -2.5
+weights <- rbind(c(mu_0),
+                 c(sigma_0))
+
+weights_and_record <- newton_iteration_descent(weights, normal_sample_data, "normal", no_of_steps = 1)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h5>With Initial Values of Estimators = Method of Moments Estimators</h5>
+<h6>Test Case 1</h6>
+```{r}
+first_weights <- rbind(c(first_estimators$Estimated_Mu),
+                       c(first_estimators$Estimated_Sigma))
+
+weights_and_record <- newton_iteration_descent(first_weights, first_sample_data, "normal", no_of_steps = 2000)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h6>Small Sample Data</h6>
+```{r}
+small_weights <- rbind(c(small_estimators$Estimated_Mu),
+                       c(small_estimators$Estimated_Sigma))
+
+weights_and_record <- newton_iteration_descent(small_weights, small_test_sample_data, "normal", no_of_steps = 1000)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h6>Large Sample Data</h6>
+```{r}
+weights <- rbind(c(estimators$Estimated_Mu),
+                 c(estimators$Estimated_Sigma))
+
+weights_and_record <- newton_iteration_descent(weights, normal_sample_data, "normal", no_of_steps = 1)
+final_weights <- weights_and_record$Final_Weights
+print(final_weights)
+```
+
+<h5>Final Tests</h5>
+<h6>Final Test # 1</h6>
+```{r}
+# Get sample
+distribution_name = "normal"
+mu <- 1
+sigma <- 4
+parameter_list <- list(mu, sigma)
+names(parameter_list) <- c("mu", "sigma")
+sample_size <- 10
+sample_data <- get_sample(sample_size = sample_size, distribution_name = distribution_name, parameter_list = parameter_list)
+```
+
+```{r}
+# Get Method of Moments Estimators
+estimators <- get_MOM_estimators(sample_data, distribution_name)
+print(estimators)
+```
+
+```{r}
+# Get initial values of parameter estimates
+sample_mean <- mean(sample_data)
+print(sample_mean)
+sample_variance <- sum((sample_data - sample_mean) ^ 2)/ (sample_size)
+sample_sd <- sqrt(sample_variance)
+print(sample_sd)
+```
+
+
+```{r}
+# Get Maximum Likelihood Estimates
+# weights <- rbind(c(estimators$Estimated_Mu),
+#                 c(estimators$Estimated_Sigma))
+
+weights_and_record <- newton_iteration_descent(weights, sample_data, distribution_name = distribution_name, no_of_steps = 5)
+final_weights <- weights_and_record$Final_Weights
+rownames(final_weights) <- c("mu", "sigma")
+# print(weights_and_record)
+```
+
+<h6>Final Test # 2</h6>
+```{r}
+# Get sample
+distribution_name = "gamma"
+alpha <- 2
+beta <- 1/3
+parameter_list <- list(alpha, beta)
+names(parameter_list) <- c("alpha", "beta")
+sample_size <- 100
+sample_data <- get_sample(sample_size = sample_size, distribution_name = distribution_name, parameter_list = parameter_list)
+```
+
+```{r}
+# Get Method of Moments Estimators
+estimators <- get_MOM_estimators(sample_data, distribution_name)
+print(estimators)
+```
+
+```{r}
+# Get Maximum Likelihood Estimates
+# weights <- rbind(c(estimators$Estimated_Alpha),
+#                  c(estimators$Estimated_Beta))
+
+weights <- rbind(c(1.2),
+                 c(0.5))
+
+weights_and_record <- newton_iteration_descent(weights, sample_data, distribution_name = distribution_name, no_of_steps = 10)
+final_weights <- weights_and_record$Final_Weights
+rownames(final_weights) <- c("alpha", "beta")
+print(weights_and_record)
+# print(final_weights)
+```
